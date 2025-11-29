@@ -1,10 +1,10 @@
-FROM ubuntu:24.04
+FROM ubuntu:25.04
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Make APT more reliable in slow/virtualized CI environments
 RUN printf "Acquire::Retries \"10\";\nAcquire::http::Timeout \"60\";\n" \
     > /etc/apt/apt.conf.d/80-retries
-
-ENV DEBIAN_FRONTEND=noninteractive
 
 # Packages roughly equivalent to your old DNF set
 # for debian use golang-github-containers-common
@@ -25,13 +25,9 @@ RUN rm -f /etc/machine-id && \
 # Configure rootless Podman user
 # ---------------------------------------------------------------------
 
-# RUN useradd podman && \
-#     echo -e "root:1:65535\npodman:1:999\npodman:1001:64535" > /etc/subuid && \
-#     echo -e "root:1:65535\npodman:1:999\npodman:1001:64535" > /etc/subgid
-
 RUN useradd -m -s /bin/bash podman && \
-    echo "root:1:65536\npodman:1:999\npodman:2000:65536" > /etc/subuid && \
-    echo "root:1:65536\npodman:1:999\npodman:2000:65536" > /etc/subgid 
+    echo "root:1:65536\npodman:1:999\npodman:1001:65536" > /etc/subuid && \
+    echo "root:1:65536\npodman:1:999\npodman:1001:65536" > /etc/subgid 
 
 ADD containers.conf /etc/containers/containers.conf
 ADD podman-containers.conf /home/podman/.config/containers/containers.conf
@@ -74,3 +70,7 @@ RUN mkdir -p /var/lib/shared/overlay-images \
 ENV _CONTAINERS_USERNS_CONFIGURED="" \
     BUILDAH_ISOLATION=chroot
 
+RUN cd /root/ && \
+    mkdir -p GitHub && \
+    cd  GitHub && \
+    git clone https://github.com/Chr1sC0de/dotfiles.git
