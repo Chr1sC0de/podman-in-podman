@@ -31,7 +31,7 @@ ARG FLAVOR=stable
 RUN echo -e "\n\n# Added during image build" >> /etc/dnf/dnf.conf && \
     echo -e "minrate=100\ntimeout=60\n" >> /etc/dnf/dnf.conf
 
-ARG INSTALL_RPMS="podman sudo ncurses fuse-overlayfs openssh-clients cpp git-core golang-github-containers-common ${SOURCE_DATE_EPOCH:+sqlite}"
+ARG INSTALL_RPMS="podman sudo ncurses fuse-overlayfs openssh-clients cpp git-core containers-common-extra ${SOURCE_DATE_EPOCH:+sqlite}"
 
 # Don't include container-selinux and remove
 # directories used by dnf that are just taking

@@ -2,7 +2,6 @@
 
 ```bash
 (cd rocky-podman-9 && podman build -t rocky-podman-9 .)
-(cd rocky-neovim-devcontainer && podman build -t rocky-neovim-devcontainer .)
 # rootless in rootless
 podman run -itd --security-opt label=disable --user podman --device /dev/fuse localhost/rocky-podman-9 
 # rootful in rootful
