@@ -1,0 +1,76 @@
+FROM ubuntu:24.04
+
+# Make APT more reliable in slow/virtualized CI environments
+RUN printf "Acquire::Retries \"10\";\nAcquire::http::Timeout \"60\";\n" \
+    > /etc/apt/apt.conf.d/80-retries
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Packages roughly equivalent to your old DNF set
+# for debian use golang-github-containers-common
+ARG INSTALL_PKGS="podman uidmap fuse-overlayfs git openssh-client cpp vim git-core golang-github-containers-common sqlite3 curl ca-certificates"
+
+# FLAVOR logic: stable / testing / upstream
+RUN apt-get update && \
+    apt-get upgrade && \
+    apt-get install -y --no-install-recommends $INSTALL_PKGS && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* 
+
+# Remove unique identifiers like the original Rocky version
+RUN rm -f /etc/machine-id && \
+    rm -f /var/lib/systemd/random-seed
+
+# ---------------------------------------------------------------------
+# Configure rootless Podman user
+# ---------------------------------------------------------------------
+
+# RUN useradd podman && \
+#     echo -e "root:1:65535\npodman:1:999\npodman:1001:64535" > /etc/subuid && \
+#     echo -e "root:1:65535\npodman:1:999\npodman:1001:64535" > /etc/subgid
+
+RUN useradd -m -s /bin/bash podman && \
+    echo "root:1:65536\npodman:1:999\npodman:2000:65536" > /etc/subuid && \
+    echo "root:1:65536\npodman:1:999\npodman:2000:65536" > /etc/subgid 
+
+ADD containers.conf /etc/containers/containers.conf
+ADD podman-containers.conf /home/podman/.config/containers/containers.conf
+
+RUN mkdir -p /home/podman/.local/share/containers && \
+    chown -R podman:podman /home/podman && \
+    chmod 644 /etc/containers/containers.conf
+
+RUN curl -o /usr/share/containers/storage.conf \ 
+    https://raw.githubusercontent.com/containers/storage/main/storage.conf
+#
+RUN curl -o /etc/containers/storage.conf \
+    https://raw.githubusercontent.com/containers/storage/main/storage.conf
+
+# Modify storage.conf: fuse-overlay in container, shared directories
+RUN sed -e 's|^#mount_program|mount_program|g' \
+    -e '/additionalimage.*/a "/var/lib/shared",' \
+    -e 's|^mountopt *=.*$|mountopt = "nodev,fsync=0"|' \
+    /usr/share/containers/storage.conf \
+    > /etc/containers/storage.conf
+
+# Subscription passthrough paths (kept as placeholders)
+RUN printf '/run/secrets/etc-pki-entitlement:/run/secrets/etc-pki-entitlement\n/run/secrets/rhsm:/run/secrets/rhsm\n' \
+    > /etc/containers/mounts.conf
+
+# Volumes — same as original
+VOLUME /var/lib/containers
+VOLUME /home/podman/.local/share/containers
+
+# Shared storage setup similar to Rocky version
+RUN mkdir -p /var/lib/shared/overlay-images \
+    /var/lib/shared/overlay-layers \
+    /var/lib/shared/vfs-images \
+    /var/lib/shared/vfs-layers && \
+    touch /var/lib/shared/overlay-images/images.lock && \
+    touch /var/lib/shared/overlay-layers/layers.lock && \
+    touch /var/lib/shared/vfs-images/images.lock && \
+    touch /var/lib/shared/vfs-layers/layers.lock
+
+ENV _CONTAINERS_USERNS_CONFIGURED="" \
+    BUILDAH_ISOLATION=chroot
+
