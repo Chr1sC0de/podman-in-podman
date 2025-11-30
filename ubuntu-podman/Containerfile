@@ -8,7 +8,7 @@ RUN printf "Acquire::Retries \"10\";\nAcquire::http::Timeout \"60\";\n" \
 
 # Packages roughly equivalent to your old DNF set
 # for debian use golang-github-containers-common
-ARG INSTALL_PKGS="sudo podman uidmap fuse-overlayfs git openssh-client cpp vim git-core golang-github-containers-common sqlite3 curl ca-certificates"
+ARG INSTALL_PKGS="sudo podman uidmap fuse-overlayfs git openssh-client cpp vim git-core golang-github-containers-common sqlite3 curl ca-certificates openssh-server"
 
 # FLAVOR logic: stable / testing / upstream
 RUN apt-get update && \
@@ -70,6 +70,17 @@ RUN mkdir -p /var/lib/shared/overlay-images \
 ENV _CONTAINERS_USERNS_CONFIGURED="" \
     BUILDAH_ISOLATION=chroot
 
+# setup ssh
+RUN mkdir -p /var/run/sshd && ssh-keygen -A
+
+RUN sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+RUN sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+RUN echo "root:test" | chpasswd
+
+RUN chmod 600 /etc/shadow
+
+# install developer tools
 RUN cd /root/ && \
     mkdir -p GitHub && \
     cd  GitHub && \

@@ -31,7 +31,7 @@ ARG FLAVOR=stable
 RUN echo -e "\n\n# Added during image build" >> /etc/dnf/dnf.conf && \
     echo -e "minrate=100\ntimeout=60\n" >> /etc/dnf/dnf.conf
 
-ARG INSTALL_RPMS="podman sudo ncurses fuse-overlayfs openssh-clients cpp git-core containers-common-extra ${SOURCE_DATE_EPOCH:+sqlite}"
+ARG INSTALL_RPMS="podman sudo ncurses fuse-overlayfs openssh-clients cpp git-core containers-common-extra ${SOURCE_DATE_EPOCH:+sqlite} shadow-utils passwd"
 
 # Don't include container-selinux and remove
 # directories used by dnf that are just taking
@@ -108,6 +108,18 @@ RUN mkdir -p /var/lib/shared/overlay-images \
     touch /var/lib/shared/vfs-images/images.lock && \
     touch /var/lib/shared/vfs-layers/layers.lock
 
+
+# setup ssh
+RUN dnf -y install openssh-server && dnf clean all
+
+RUN mkdir -p /var/run/sshd && ssh-keygen -A
+
+RUN sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+RUN sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+RUN echo "root:test" | chpasswd
+
+RUN chmod 600 /etc/shadow
 
 ENV _CONTAINERS_USERNS_CONFIGURED="" \
     BUILDAH_ISOLATION=chroot
