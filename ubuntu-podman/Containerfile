@@ -1,23 +1,32 @@
 FROM ubuntu:25.04
 
+# Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Make APT more reliable in slow/virtualized CI environments
+# Configure APT to be more resilient in slow/virtualized environments
+# - Retry failed downloads up to 10 times
+# - Set 60 second timeout for HTTP connections
 RUN printf "Acquire::Retries \"10\";\nAcquire::http::Timeout \"60\";\n" \
     > /etc/apt/apt.conf.d/80-retries
 
-# Packages roughly equivalent to your old DNF set
-# for debian use golang-github-containers-common
+# Define packages to install for rootless Podman functionality
+# - podman: Container engine
+# - uidmap: User namespace mapping tools (newuidmap/newgidmap)
+# - fuse-overlayfs: Filesystem driver for rootless containers
+# - golang-github-containers-common: Common container configurations
+# - openssh-server/client: SSH connectivity
+# - libcap2-bin: For setting file capabilities (setcap)
 ARG INSTALL_PKGS="sudo podman uidmap fuse-overlayfs git openssh-client cpp vim git-core golang-github-containers-common sqlite3 curl ca-certificates openssh-server libcap2-bin"
 
-# FLAVOR logic: stable / testing / upstream
+# Install packages and clean up to reduce image size
 RUN apt-get update && \
     apt-get upgrade && \
     apt-get install -y --no-install-recommends $INSTALL_PKGS && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* 
 
-# Remove unique identifiers like the original Rocky version
+# Remove machine-specific identifiers to make the image more reproducible
+# This ensures each container starts with a fresh identity
 RUN rm -f /etc/machine-id && \
     rm -f /var/lib/systemd/random-seed
 
@@ -25,44 +34,56 @@ RUN rm -f /etc/machine-id && \
 # Configure rootless Podman user
 # ---------------------------------------------------------------------
 
-# Fix newuidmap/newgidmap permissions (critical for Ubuntu 24.04)
-RUN chmod u+s /usr/bin/newuidmap /usr/bin/newgidmap && \
-    chmod 4755 /usr/bin/newuidmap /usr/bin/newgidmap
-
-# It's assumed `ubuntu` will end up with UID/GID 1000
+# Configure subordinate UID/GID ranges for rootless operation
+# - root gets UIDs/GIDs 1-65535 for administrative purposes
+# - ubuntu user gets UIDs 1-999 (system range)
+# - we're assuming ubuntu user gets UID 1000
+# - ubuntu user gets UIDs 1001-65535 (user range, skipping 1000)
+# This allows the ubuntu user to run containers with proper UID mapping
 RUN echo -e "root:1:65535\nubuntu:1:999\nubuntu:1001:64535" > /etc/subuid && \
     echo -e "root:1:65535\nubuntu:1:999\nubuntu:1001:64535" > /etc/subgid
 
 
+# Copy container configuration files
+# - System-wide configuration for all users
+# - User-specific configuration for ubuntu user
 ADD containers.conf /etc/containers/containers.conf
 ADD podman-containers.conf /home/ubuntu/.config/containers/containers.conf
 
+# Create container storage directory for ubuntu user and set permissions
 RUN mkdir -p /home/ubuntu/.local/share/containers && \
     chown -R ubuntu:ubuntu /home/ubuntu && \
     chmod 644 /etc/containers/containers.conf
 
+# Download default storage configuration from containers/storage project
+# This provides system-wide storage defaults
 RUN curl -o /usr/share/containers/storage.conf \ 
     https://raw.githubusercontent.com/containers/storage/main/storage.conf
-#
+
+# Download storage configuration for active user
 RUN curl -o /etc/containers/storage.conf \
     https://raw.githubusercontent.com/containers/storage/main/storage.conf
 
-# Modify storage.conf: fuse-overlay in container, shared directories
+# Customize storage.conf for rootless container operation:
+# - Enable fuse-overlayfs mount program (required for rootless)
+# - Add /var/lib/shared to additional image stores for shared storage
+# - Set mount options: nodev for security, fsync=0 for performance
 RUN sed -e 's|^#mount_program|mount_program|g' \
     -e '/additionalimage.*/a "/var/lib/shared",' \
     -e 's|^mountopt *=.*$|mountopt = "nodev,fsync=0"|' \
     /usr/share/containers/storage.conf \
     > /etc/containers/storage.conf
 
-# Subscription passthrough paths (kept as placeholders)
-RUN printf '/run/secrets/etc-pki-entitlement:/run/secrets/etc-pki-entitlement\n/run/secrets/rhsm:/run/secrets/rhsm\n' \
-    > /etc/containers/mounts.conf
 
-# Volumes — same as original
+# Define persistent volumes for container storage
+# - System-wide container storage (images, layers, etc.)
+# - User-specific container storage for ubuntu user
 VOLUME /var/lib/containers
 VOLUME /home/ubuntu/.local/share/containers
 
-# Shared storage setup similar to Rocky version
+# Create shared storage directories for multi-user scenarios
+# Separate directories for different storage drivers (overlay, vfs)
+# Lock files prevent concurrent access conflicts
 RUN mkdir -p /var/lib/shared/overlay-images \
     /var/lib/shared/overlay-layers \
     /var/lib/shared/vfs-images \
@@ -79,14 +100,27 @@ RUN chmod 0755 /usr/bin/newuidmap /usr/bin/newgidmap && \
     setcap cap_setgid=ep /usr/bin/newgidmap && \
     apt-get autoremove --purge -y libcap2-bin
 
+# Environment variables for container runtime
+# - _CONTAINERS_USERNS_CONFIGURED: Indicates user namespaces are configured
+# - BUILDAH_ISOLATION=chroot: Use chroot isolation for buildah (lighter than default)
 ENV _CONTAINERS_USERNS_CONFIGURED="" \
     BUILDAH_ISOLATION=chroot
 
-# setup ssh
+# ---------------------------------------------------------------------
+# SSH Server Configuration
+# ---------------------------------------------------------------------
+
+# Set up SSH server for remote access
+# - Create runtime directory for SSH daemon
+# - Generate SSH host keys (RSA, ECDSA, ED25519)
 RUN mkdir -p /var/run/sshd && ssh-keygen -A
 
+# Enable password authentication in SSH (disabled by default on Ubuntu)
 RUN sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
+# Secure the shadow password file (contains encrypted passwords)
 RUN chmod 600 /etc/shadow
 
+# Set password for ubuntu user to "test"
+# WARNING: This is insecure for production use - change or remove in production
 RUN echo "ubuntu:test" | chpasswd
