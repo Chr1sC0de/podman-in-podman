@@ -115,11 +115,10 @@ RUN dnf -y install openssh-server && dnf clean all
 RUN mkdir -p /var/run/sshd && ssh-keygen -A
 
 RUN sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-RUN sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-
-RUN echo "root:test" | chpasswd
 
 RUN chmod 600 /etc/shadow
 
 ENV _CONTAINERS_USERNS_CONFIGURED="" \
     BUILDAH_ISOLATION=chroot
+
+RUN echo "podman:test" | chpasswd
