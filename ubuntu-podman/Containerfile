@@ -8,7 +8,7 @@ RUN printf "Acquire::Retries \"10\";\nAcquire::http::Timeout \"60\";\n" \
 
 # Packages roughly equivalent to your old DNF set
 # for debian use golang-github-containers-common
-ARG INSTALL_PKGS="sudo podman uidmap fuse-overlayfs git openssh-client cpp vim git-core golang-github-containers-common sqlite3 curl ca-certificates openssh-server"
+ARG INSTALL_PKGS="sudo podman uidmap fuse-overlayfs git openssh-client cpp vim git-core golang-github-containers-common sqlite3 curl ca-certificates openssh-server libcap2-bin"
 
 # FLAVOR logic: stable / testing / upstream
 RUN apt-get update && \
@@ -25,15 +25,20 @@ RUN rm -f /etc/machine-id && \
 # Configure rootless Podman user
 # ---------------------------------------------------------------------
 
-RUN useradd -m -s /bin/bash podman && \
-    echo "root:1:65536\npodman:1:999\npodman:1001:65536" > /etc/subuid && \
-    echo "root:1:65536\npodman:1:999\npodman:1001:65536" > /etc/subgid 
+# Fix newuidmap/newgidmap permissions (critical for Ubuntu 24.04)
+RUN chmod u+s /usr/bin/newuidmap /usr/bin/newgidmap && \
+    chmod 4755 /usr/bin/newuidmap /usr/bin/newgidmap
+
+# It's assumed `ubuntu` will end up with UID/GID 1000
+RUN echo -e "root:1:65535\nubuntu:1:999\nubuntu:1001:64535" > /etc/subuid && \
+    echo -e "root:1:65535\nubuntu:1:999\nubuntu:1001:64535" > /etc/subgid
+
 
 ADD containers.conf /etc/containers/containers.conf
-ADD podman-containers.conf /home/podman/.config/containers/containers.conf
+ADD podman-containers.conf /home/ubuntu/.config/containers/containers.conf
 
-RUN mkdir -p /home/podman/.local/share/containers && \
-    chown -R podman:podman /home/podman && \
+RUN mkdir -p /home/ubuntu/.local/share/containers && \
+    chown -R ubuntu:ubuntu /home/ubuntu && \
     chmod 644 /etc/containers/containers.conf
 
 RUN curl -o /usr/share/containers/storage.conf \ 
@@ -55,7 +60,7 @@ RUN printf '/run/secrets/etc-pki-entitlement:/run/secrets/etc-pki-entitlement\n/
 
 # Volumes — same as original
 VOLUME /var/lib/containers
-VOLUME /home/podman/.local/share/containers
+VOLUME /home/ubuntu/.local/share/containers
 
 # Shared storage setup similar to Rocky version
 RUN mkdir -p /var/lib/shared/overlay-images \
@@ -67,6 +72,13 @@ RUN mkdir -p /var/lib/shared/overlay-images \
     touch /var/lib/shared/vfs-images/images.lock && \
     touch /var/lib/shared/vfs-layers/layers.lock
 
+# Replace setuid bits by proper file capabilities for uidmap binaries.
+# See <https://github.com/containers/podman/discussions/19931>.
+RUN chmod 0755 /usr/bin/newuidmap /usr/bin/newgidmap && \
+    setcap cap_setuid=ep /usr/bin/newuidmap && \
+    setcap cap_setgid=ep /usr/bin/newgidmap && \
+    apt-get autoremove --purge -y libcap2-bin
+
 ENV _CONTAINERS_USERNS_CONFIGURED="" \
     BUILDAH_ISOLATION=chroot
 
@@ -74,14 +86,7 @@ ENV _CONTAINERS_USERNS_CONFIGURED="" \
 RUN mkdir -p /var/run/sshd && ssh-keygen -A
 
 RUN sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-RUN sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-
-RUN echo "root:test" | chpasswd
 
 RUN chmod 600 /etc/shadow
 
-# install developer tools
-RUN cd /root/ && \
-    mkdir -p GitHub && \
-    cd  GitHub && \
-    git clone https://github.com/Chr1sC0de/dotfiles.git
+RUN echo "ubuntu:test" | chpasswd
