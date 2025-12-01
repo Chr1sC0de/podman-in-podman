@@ -11,12 +11,8 @@ podman run -itd --cap-add=sys_admin,mknod --device=/dev/fuse --security-opt labe
 ```bash
 (cd ubuntu-podman && podman build -t ubuntu-podman .)
 
-# rootless is working!!
-podman run -it --replace \
-  --name ubuntu-podman \
-  --user ubuntu \
-  --device /dev/fuse \
-  localhost/ubuntu-podman
+# rootless in rootless
+podman run -it --replace --name ubuntu-podman --user ubuntu --device /dev/fuse localhost/ubuntu-podman
 
 # rootful in rootful
 podman run -it --cap-add=sys_admin,mknod --device=/dev/fuse --security-opt label=disable localhost/ubuntu-podman
