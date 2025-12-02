@@ -8,8 +8,7 @@ RUN echo -e "\n\n# Added during image build" >> /etc/dnf/dnf.conf && \
     echo -e "minrate=0\ntimeout=60\n" >> /etc/dnf/dnf.conf
 
 RUN dnf update -y && \
-    dnf install -y podman fuse-overlayfs slirp4netns shadow-utils ca-certificates && \
-    dnf clean all
+    dnf install -y podman fuse-overlayfs slirp4netns shadow-utils ca-certificates 
 
 RUN useradd -m -u 1000 rocky && \
     echo "rocky:test" | chpasswd && \
@@ -35,7 +34,10 @@ RUN dnf install -y libcap && \
 
 RUN echo "rocky ALL=(ALL) NOPASSWD: /usr/sbin/sshd" >> /etc/sudoers 
 
-RUN dnf -y install openssh-server sudo && dnf clean all
+# setup ssh
+RUN dnf -y install openssh-server sudo
+
+RUN dnf clean all
 
 RUN mkdir -p /var/run/sshd && ssh-keygen -A
 
