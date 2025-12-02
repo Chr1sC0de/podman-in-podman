@@ -15,9 +15,8 @@ RUN useradd -m -u 1000 rocky && \
     echo "rocky:1001:64535" > /etc/subuid && \
     echo "rocky:1001:64535" > /etc/subgid
 
-ARG _REPO_URL="https://raw.githubusercontent.com/containers/image_build/refs/heads/main/podman"
-ADD $_REPO_URL/containers.conf /etc/containers/containers.conf
-ADD $_REPO_URL/podman-containers.conf /home/rocky/.config/containers/containers.conf
+ADD /containers.conf /etc/containers/containers.conf
+ADD /podman-containers.conf /home/rocky/.config/containers/containers.conf
 
 RUN mkdir -p /home/rocky/.local/share/containers && \
     chown rocky:rocky -R /home/rocky && \

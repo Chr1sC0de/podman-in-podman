@@ -7,9 +7,11 @@ RUN apt-get update && \
 RUN echo "ubuntu:1001:64535" > /etc/subuid && \
     echo "ubuntu:1001:64535" > /etc/subgid
 
-ARG _REPO_URL="https://raw.githubusercontent.com/containers/image_build/refs/heads/main/podman"
-ADD $_REPO_URL/containers.conf /etc/containers/containers.conf
-ADD $_REPO_URL/podman-containers.conf /home/ubuntu/.config/containers/containers.conf
+# Copy container configuration files
+# - System-wide configuration for all users
+# - User-specific configuration for ubuntu user
+ADD containers.conf /etc/containers/containers.conf
+ADD podman-containers.conf /home/ubuntu/.config/containers/containers.conf
 
 RUN mkdir -p /home/ubuntu/.local/share/containers && \
     chown ubuntu:ubuntu -R /home/ubuntu && \
