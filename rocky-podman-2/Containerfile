@@ -1,10 +1,18 @@
 FROM rockylinux:9
 
+# When building for multiple-architectures in parallel using emulation
+# it's really easy for one/more dnf processes to timeout or mis-count
+# the minimum download rates.  Bump both to be extremely forgiving of
+# an overworked host.
+RUN echo -e "\n\n# Added during image build" >> /etc/dnf/dnf.conf && \
+    echo -e "minrate=0\ntimeout=60\n" >> /etc/dnf/dnf.conf
+
 RUN dnf update -y && \
     dnf install -y podman fuse-overlayfs slirp4netns shadow-utils ca-certificates && \
     dnf clean all
 
 RUN useradd -m -u 1000 rocky && \
+    echo "rocky:test" | chpasswd && \
     echo "rocky:1001:64535" > /etc/subuid && \
     echo "rocky:1001:64535" > /etc/subgid
 
@@ -31,7 +39,10 @@ RUN dnf -y install openssh-server sudo && dnf clean all
 
 RUN mkdir -p /var/run/sshd && ssh-keygen -A
 
-RUN sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+# Enable password authentication for testing
+RUN sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/^PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/^#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 
 RUN chmod 600 /etc/shadow
 
