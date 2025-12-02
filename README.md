@@ -23,17 +23,30 @@ podman run -it --cap-add=sys_admin,mknod --device=/dev/fuse --security-opt label
 ```
 
 
-## Ubuntu Podman
+## Ubuntu Podman 2
 
 ```bash
 (cd ubuntu-podman-2 && podman build -t ubuntu-podman-2 .)
 
 # rootless in rootless
-podman run -it --replace --name ubuntu-podman-2 --user ubuntu --device /dev/fuse localhost/ubuntu-podman-2
+podman run -itd --replace --name ubuntu-podman-2 --user ubuntu --device /dev/fuse localhost/ubuntu-podman-2
 
 # rootful in rootful
-podman run -it --cap-add=sys_admin,mknod --device=/dev/fuse --security-opt label=disable localhost/ubuntu-podman
+podman run -itd --cap-add=sys_admin,mknod --device=/dev/fuse --security-opt label=disable localhost/ubuntu-podman-2
 ```
+
+## Rocky Podman 2
+
+```bash
+(cd rocky-podman-2 && podman build -t rocky-podman-2 .)
+
+# rootless in rootless
+podman run -it --replace --name rocky-podman-2 --user rocky --device /dev/fuse localhost/rocky-podman-2
+
+# rootful in rootful
+podman run -it --cap-add=sys_admin,mknod --device=/dev/fuse --security-opt label=disable localhost/rocky-podman-2
+```
+
 
 ## Resources
 

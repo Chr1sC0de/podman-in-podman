@@ -1,0 +1,43 @@
+FROM rockylinux:9
+
+RUN dnf update -y && \
+    dnf install -y podman fuse-overlayfs slirp4netns shadow-utils ca-certificates && \
+    dnf clean all
+
+RUN useradd -m -u 1000 rocky && \
+    echo "rocky:1001:64535" > /etc/subuid && \
+    echo "rocky:1001:64535" > /etc/subgid
+
+ARG _REPO_URL="https://raw.githubusercontent.com/containers/image_build/refs/heads/main/podman"
+ADD $_REPO_URL/containers.conf /etc/containers/containers.conf
+ADD $_REPO_URL/podman-containers.conf /home/rocky/.config/containers/containers.conf
+
+RUN mkdir -p /home/rocky/.local/share/containers && \
+    chown rocky:rocky -R /home/rocky && \
+    chmod 0644 /etc/containers/containers.conf
+
+VOLUME /home/rocky/.local/share/containers
+
+# Replace setuid bits by proper file capabilities for uidmap binaries.
+# See <https://github.com/containers/podman/discussions/19931>.
+RUN dnf install -y libcap && \
+    chmod 0755 /usr/bin/newuidmap /usr/bin/newgidmap && \
+    setcap cap_setuid=ep /usr/bin/newuidmap && \
+    setcap cap_setgid=ep /usr/bin/newgidmap 
+
+RUN echo "rocky ALL=(ALL) NOPASSWD: /usr/sbin/sshd" >> /etc/sudoers 
+
+RUN dnf -y install openssh-server sudo && dnf clean all
+
+RUN mkdir -p /var/run/sshd && ssh-keygen -A
+
+RUN sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+RUN chmod 600 /etc/shadow
+
+ENV _CONTAINERS_USERNS_CONFIGURED=""
+
+USER rocky
+WORKDIR /home/rocky
+
+CMD sudo /usr/sbin/sshd -D
