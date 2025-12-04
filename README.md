@@ -30,6 +30,34 @@ podman run -it --cap-add=sys_admin,mknod --device=/dev/fuse --security-opt label
 
 # rootless in rootless
 podman run -itd --replace --name ubuntu-podman-2 --user ubuntu --device /dev/fuse localhost/ubuntu-podman-2
+podman run -it --replace --name ubuntu-podman-2 --user ubuntu --device /dev/fuse localhost/ubuntu-podman-2
+
+# start neovim remote
+# on host 
+touch /tmp/nvim.socket
+
+# create the container
+podman run \
+    -it \
+    --replace \
+    --userns=keep-id:uid=1000\
+    --name ubuntu-podman-2 \
+    --user ubuntu \
+    --device /dev/fuse \
+    --mount type=bind,source=/tmp,target=/tmp,rw \
+    localhost/ubuntu-podman-2
+
+podman exec \
+    -it \
+    ubuntu-podman-2 \
+
+# from within the container
+nvim --headless --listen /tmp/nvim.socket
+
+# from the host
+nvim --remote-ui --server /tmp/nvim.socket
+
+podman exec -it ubuntu-podman-2 bash
 
 # rootful in rootful
 podman run -itd --cap-add=sys_admin,mknod --device=/dev/fuse --security-opt label=disable localhost/ubuntu-podman-2

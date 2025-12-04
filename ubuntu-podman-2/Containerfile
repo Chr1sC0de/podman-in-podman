@@ -1,8 +1,19 @@
 FROM ubuntu:25.04
 
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends podman fuse-overlayfs slirp4netns uidmap ca-certificates openssh-client git
+RUN --mount=type=cache,target=/var/lib/apt/lists \
+    --mount=type=cache,target=/var/cache/apt <<EOF
+apt-get update
+apt-get upgrade -y
+apt-get install -y --no-install-recommends \
+    podman \
+    fuse-overlayfs \
+    slirp4netns \
+    uidmap \
+    ca-certificates \
+    openssh-client \
+    sudo \
+    git
+EOF
 
 RUN echo "ubuntu:1001:64535" > /etc/subuid && \
     echo "ubuntu:1001:64535" > /etc/subgid
@@ -17,15 +28,21 @@ RUN mkdir -p /home/ubuntu/.local/share/containers && \
     chown ubuntu:ubuntu -R /home/ubuntu && \
     chmod 0644 /etc/containers/containers.conf
 
+RUN echo "ubuntu ALL=(ALL) NOPASSWD:ALL" | sudo tee -a /etc/sudoers
+
 VOLUME /home/ubuntu/.local/share/containers
 
 # Replace setuid bits by proper file capabilities for uidmap binaries.
 # See <https://github.com/containers/podman/discussions/19931>.
-RUN apt-get install -y libcap2-bin && \
-    chmod 0755 /usr/bin/newuidmap /usr/bin/newgidmap && \
-    setcap cap_setuid=ep /usr/bin/newuidmap && \
-    setcap cap_setgid=ep /usr/bin/newgidmap && \
-    apt-get autoremove --purge -y libcap2-bin
+
+RUN --mount=type=cache,target=/var/lib/apt/lists \
+    --mount=type=cache,target=/var/cache/apt <<EOF
+apt-get install -y libcap2-bin
+chmod 0755 /usr/bin/newuidmap /usr/bin/newgidmap
+setcap cap_setuid=ep /usr/bin/newuidmap
+setcap cap_setgid=ep /usr/bin/newgidmap
+apt-get autoremove --purge -y libcap2-bin
+EOF
 
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/* 
